@@ -81,7 +81,12 @@ export default function Centers() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Center Network</h1>
-            <p className="text-slate-500 font-medium">Manage and monitor all diagnostic nodes</p>
+            <div className="flex items-center gap-3 mt-1">
+                <p className="text-slate-500 font-medium">Manage and monitor all diagnostic nodes</p>
+                <span className="text-[10px] font-black bg-[#EBF7F7] text-[#00828A] px-2 py-0.5 rounded-full uppercase tracking-widest border border-[#D5EFEF]">
+                    {filteredCenters.length} Nodes Online
+                </span>
+            </div>
           </div>
           <button
             onClick={() => router.push('/centers/add')}

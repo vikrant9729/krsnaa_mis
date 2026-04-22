@@ -1,17 +1,26 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const api = axios.create();
 
-export const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Request interceptor to add auth token
+// Dynamically set baseURL for each request if it's not already set
 api.interceptors.request.use(
   (config) => {
+    if (!config.baseURL) {
+        if (process.env.NEXT_PUBLIC_API_URL) {
+            config.baseURL = process.env.NEXT_PUBLIC_API_URL;
+        } else if (typeof window !== 'undefined') {
+            const hostname = window.location.hostname;
+            if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+                config.baseURL = `http://${hostname}:8000`;
+            } else {
+                config.baseURL = 'http://localhost:8000';
+            }
+        } else {
+            config.baseURL = 'http://localhost:8000';
+        }
+        console.log(`[API] Connecting to: ${config.baseURL}`);
+    }
+    
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

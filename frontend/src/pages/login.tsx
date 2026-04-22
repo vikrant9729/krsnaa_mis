@@ -11,6 +11,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [apiUrl, setApiUrl] = useState('');
   const { login, isAuthenticated, hasHydratedAuth } = useAuthStore();
   const router = useRouter();
 
@@ -18,6 +19,13 @@ export default function Login() {
     if (hasHydratedAuth && isAuthenticated) {
       router.push('/dashboard');
     }
+
+    // Load API URL for debugging
+    const hostname = window.location.hostname;
+    const resolvedUrl = hostname !== 'localhost' && hostname !== '127.0.0.1' 
+        ? `http://${hostname}:8000` 
+        : 'http://localhost:8000';
+    setApiUrl(resolvedUrl);
   }, [hasHydratedAuth, isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -32,7 +40,12 @@ export default function Login() {
       toast.success('Access Granted');
       router.push('/dashboard');
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Authentication Failed');
+      console.error('Login error:', error);
+      if (!error.response) {
+        toast.error('Network Error: Cannot connect to Backend. Check if the server is running and firewall is open.');
+      } else {
+        toast.error(error.response?.data?.detail || 'Authentication Failed');
+      }
       localStorage.removeItem('token');
     } finally {
       setLoading(false);
@@ -72,6 +85,13 @@ export default function Login() {
               className="w-32 lg:w-40 h-auto object-contain mb-4" 
             />
             <h3 className="text-xl lg:text-2xl font-medium text-slate-600">Login to your Account</h3>
+            {/* Debug Info for Network Troubleshooting */}
+            <div className="mt-2 px-3 py-1 bg-slate-50 rounded-full border border-slate-100 flex items-center">
+                <div className="w-1.5 h-1.5 bg-[#00B4C1] rounded-full mr-2 animate-pulse" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    API: {apiUrl || 'Initializing...'}
+                </span>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">

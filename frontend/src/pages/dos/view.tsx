@@ -91,22 +91,26 @@ export default function ViewDOS() {
   };
 
   const exportExcel = async () => {
+    if (!selectedCenter) {
+      toast.error('No center selected', { id: 'export' });
+      return;
+    }
     try {
       toast.loading('Preparing export...', { id: 'export' });
-      const params = new URLSearchParams({
-        center_id: selectedCenter,
-        search: search
-      });
-      const response = await api.get(`/api/dos/export?${params}`, { responseType: 'blob' });
+      const response = await api.get(`/api/dos/export/${selectedCenter}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `DOS_Data_${new Date().toISOString()}.xlsx`);
+      link.setAttribute('download', `DOS_Center_${selectedCenter}_${new Date().toISOString()}.xlsx`);
       document.body.appendChild(link);
       link.click();
+      link.remove();
       toast.success('Export complete', { id: 'export' });
-    } catch (error) {
+    } catch (error: any) {
       toast.error('Export failed', { id: 'export' });
+      if (error?.response?.data?.detail) {
+        toast.error(error.response.data.detail, { id: 'export-detail' });
+      }
     }
   };
 
@@ -153,16 +157,27 @@ export default function ViewDOS() {
               className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-transparent focus:border-[#00B4C1]/30 rounded-xl outline-none font-medium text-slate-700 transition-all"
             />
           </div>
-          <div className="md:w-64 relative">
-             <FiGrid className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-             <select
-                value={selectedCenter}
-                onChange={(e) => { setSelectedCenter(e.target.value); setPage(1); }}
-                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-transparent focus:border-[#00B4C1]/30 rounded-xl outline-none font-medium text-slate-700 appearance-none cursor-pointer"
-             >
-                <option value="">All Centers</option>
-                {centers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-             </select>
+          <div className="md:w-64 relative flex gap-2">
+             <div className="relative flex-1">
+                 <FiGrid className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                 <select
+                    value={selectedCenter}
+                    onChange={(e) => { setSelectedCenter(e.target.value); setPage(1); }}
+                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-transparent focus:border-[#00B4C1]/30 rounded-xl outline-none font-medium text-slate-700 appearance-none cursor-pointer"
+                 >
+                    <option value="">All Centers</option>
+                    {centers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                 </select>
+             </div>
+             {selectedCenter && (
+                 <button 
+                    onClick={() => router.push(`/dos/grid/${selectedCenter}`)}
+                    className="p-3 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all flex items-center justify-center"
+                    title="Open in Excel Grid"
+                 >
+                    <FiDatabase className="w-5 h-5" />
+                 </button>
+             )}
           </div>
         </div>
 

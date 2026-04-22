@@ -10,6 +10,8 @@ const Toaster = dynamic(() => import('react-hot-toast').then((mod) => mod.Toaste
   ssr: false,
 });
 
+const AIChatPanel = dynamic(() => import('../components/AIChatPanel'), { ssr: false });
+
 function AuthBootstrap() {
   const { token, user, isAuthenticated, setUser, logout, setAuthHydrated } = useAuthStore();
 
@@ -83,6 +85,7 @@ export default function App({ Component, pageProps }: AppProps) {
           },
         }}
       />
+      <AIChatPanel />
     </>
   );
 }

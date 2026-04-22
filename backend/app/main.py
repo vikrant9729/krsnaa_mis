@@ -1,7 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 
-from app.api import ai, audit, auth, bulk, centers, dos, search, users, stats, tests, master_tests
+from app.api import ai, audit, auth, bulk, centers, dos, search, users, stats, tests, master_tests, jobs, rate_management
 from app.core.config import settings
 from app.db.session import Base, engine
 
@@ -14,10 +17,28 @@ app = FastAPI(
     version="2.0.0",
 )
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    print(f"VALIDATION ERROR: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": str(exc.body)},
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    print(f"SERVER ERROR: {str(exc)}")
+    print(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal Server Error: {str(exc)}"},
+    )
+
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,6 +56,8 @@ app.include_router(users.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 app.include_router(tests.router, prefix="/api")
 app.include_router(master_tests.router, prefix="/api")
+app.include_router(rate_management.router, prefix="/api")
+app.include_router(jobs.router, prefix="/api")
 
 
 @app.get("/health")

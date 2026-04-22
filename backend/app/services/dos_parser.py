@@ -32,11 +32,9 @@ def parse_upload(content: bytes, filename: str) -> list[dict]:
         df = pd.read_csv(BytesIO(content))
         return _validate_and_convert(df)
 
-    workbook = pd.read_excel(BytesIO(content), sheet_name=None)
-    rows: list[dict] = []
-    for _, sheet_df in workbook.items():
-        rows.extend(_validate_and_convert(sheet_df, strict=False))
-    return rows
+    # Read ONLY the first sheet to avoid hidden/duplicate sheets
+    df = pd.read_excel(BytesIO(content), sheet_name=0)
+    return _validate_and_convert(df, strict=False)
 
 
 def _validate_and_convert(df: pd.DataFrame, strict: bool = True) -> list[dict]:
@@ -53,8 +51,11 @@ def _validate_and_convert(df: pd.DataFrame, strict: bool = True) -> list[dict]:
     for row in df.to_dict(orient="records"):
         normalized = {str(k).strip(): v for k, v in row.items()}
         
-        # Skip completely empty rows or rows without a center code/test code
-        if not str(normalized.get("CC_Code", "")).strip() and not str(normalized.get("Test_Code", "")).strip():
+        # Must have a center identifier AND a test identifier
+        cc = str(normalized.get("CC_Code", "")).strip() or str(normalized.get("OwnerID", "")).strip()
+        tc = str(normalized.get("Test_Code", "")).strip() or str(normalized.get("LAB_TestID", "")).strip()
+        
+        if not cc or not tc:
             continue
             
         normalized["__row_hash"] = hashlib.sha256(str(normalized).encode()).hexdigest()

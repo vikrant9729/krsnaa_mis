@@ -19,6 +19,8 @@ export default function BulkOperations() {
   const [logs, setLogs] = useState<string[]>([]);
   const [stats, setStats] = useState({ total: 0, processed: 0, errors: 0 });
   const [activeTab, setActiveTab] = useState<'upload' | 'sync' | 'clean'>('upload');
+  const [progress, setProgress] = useState(0);
+  const [jobId, setJobId] = useState<string | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const { isAuthenticated } = useAuthStore();
@@ -41,24 +43,52 @@ export default function BulkOperations() {
   const handleUpload = async () => {
     if (!file) return;
     setUploading(true);
+    setProgress(0);
     setLogs([]);
     addLog('Initializing secure upload pipeline...');
     
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('mode', 'replace');
 
     try {
       addLog(`Streaming data packet: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`);
       const response = await api.post('/api/bulk/upload', formData);
-      addLog('Server handshake successful. Processing records...');
-      setStats({ total: response.data.total, processed: response.data.processed, errors: response.data.errors });
-      addLog(`Operation Complete: ${response.data.processed} records ingested into master index.`);
-      if (response.data.errors > 0) addLog(`Warning: ${response.data.errors} data collisions detected.`);
-      toast.success('Bulk Upload Complete');
+      const newJobId = response.data.job_id;
+      setJobId(newJobId);
+      addLog(`Handshake successful. Task ID: ${newJobId}`);
+      addLog(`Total rows identified: ${response.data.total_rows.toLocaleString()}`);
+
+      // Start Polling
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await api.get(`/api/bulk/progress/${newJobId}`);
+          const { status, progress: currentProgress, processed_groups, error } = statusRes.data;
+          
+          setProgress(currentProgress);
+          
+          if (status === 'processing') {
+            addLog(`Processing: ${currentProgress}% complete... (${processed_groups || 0} batches)`);
+          } else if (status === 'completed') {
+            clearInterval(pollInterval);
+            setUploading(false);
+            setProgress(100);
+            addLog('🎉 Operation Complete: All records ingested successfully.');
+            toast.success('Bulk Upload Complete');
+          } else if (status === 'failed') {
+            clearInterval(pollInterval);
+            setUploading(false);
+            addLog(`❌ CRITICAL ERROR: ${error}`);
+            toast.error('Upload failed on server');
+          }
+        } catch (pollErr) {
+          console.error('Polling error:', pollErr);
+        }
+      }, 2000);
+
     } catch (error: any) {
       addLog('CRITICAL ERROR: Transmission interrupted.');
       toast.error('Upload failed');
-    } finally {
       setUploading(false);
     }
   };
@@ -117,6 +147,21 @@ export default function BulkOperations() {
                 </label>
               </div>
 
+              {uploading && (
+                <div className="mt-8 space-y-2">
+                  <div className="flex justify-between text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    <span>Processing Pipeline</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-[#00B4C1] transition-all duration-500 ease-out shadow-[0_0_10px_rgba(0,180,193,0.5)]" 
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={handleUpload}
                 disabled={!file || uploading}
@@ -129,7 +174,7 @@ export default function BulkOperations() {
                 {uploading ? (
                     <div className="flex items-center justify-center">
                         <FiRefreshCw className="mr-2 animate-spin" />
-                        Processing...
+                        Executing Pipeline...
                     </div>
                 ) : 'Execute Upload'}
               </button>

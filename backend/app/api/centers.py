@@ -51,6 +51,15 @@ def list_centers(db: Session = Depends(get_db), current_user: User = Depends(get
     return db.query(Center).order_by(Center.id.asc()).all()
 
 
+@router.get("/{center_id}", response_model=CenterOut)
+def get_center(center_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_permission(current_user, "center:read")
+    center = db.query(Center).filter(Center.id == center_id).first()
+    if not center:
+        raise HTTPException(status_code=404, detail="Center not found")
+    return center
+
+
 
 @router.patch("/{center_id}", response_model=CenterOut)
 def update_center(
@@ -138,19 +147,59 @@ def delete_center(
 @router.delete("/all/confirm")
 def delete_all_centers(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_permission(current_user, "center:write")
-    # This is a dangerous operation
-    db.query(Center).delete()
-    db.commit()
-    return {"status": "success", "message": "All centers deleted"}
+    from app.models.entities import DosRow, DosDataset, DOSVersionSnapshot, AISuggestion, CenterTest, UserCenterAssignment
+    
+    try:
+        # 1. Nullify self-references
+        db.query(Center).update({"parent_id": None, "base_center_id": None})
+        db.flush()
+        
+        # 2. Delete child records
+        db.query(DosRow).delete()
+        db.query(DosDataset).delete()
+        db.query(DOSVersionSnapshot).delete()
+        db.query(AISuggestion).delete()
+        db.query(UserCenterAssignment).delete()
+        db.query(CenterTest).delete()
+        
+        # 3. Delete centers
+        db.query(Center).delete()
+        db.commit()
+        return {"status": "success", "message": "All centers and related data deleted"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Deep delete failed: {str(e)}")
 
 
 @router.post("/bulk-delete")
 def bulk_delete_centers(payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_permission(current_user, "center:write")
+    from app.models.entities import DosRow, DosDataset, DOSVersionSnapshot, AISuggestion, CenterTest, UserCenterAssignment
+    
     ids = payload.get("ids", [])
     if not ids:
         raise HTTPException(status_code=400, detail="No IDs provided")
     
-    db.query(Center).filter(Center.id.in_(ids)).delete(synchronize_session=False)
-    db.commit()
-    return {"status": "success", "message": f"Deleted {len(ids)} centers"}
+    try:
+        # 1. Nullify self-references for these IDs
+        db.query(Center).filter(Center.id.in_(ids)).update({"parent_id": None, "base_center_id": None}, synchronize_session=False)
+        
+        # 2. Find associated datasets to delete their rows
+        dataset_ids = [d.id for d in db.query(DosDataset.id).filter(DosDataset.center_id.in_(ids)).all()]
+        if dataset_ids:
+            db.query(DosRow).filter(DosRow.dataset_id.in_(dataset_ids)).delete(synchronize_session=False)
+            db.query(DOSVersionSnapshot).filter(DOSVersionSnapshot.dataset_id.in_(dataset_ids)).delete(synchronize_session=False)
+        
+        # 3. Delete other dependencies
+        db.query(DosDataset).filter(DosDataset.center_id.in_(ids)).delete(synchronize_session=False)
+        db.query(AISuggestion).filter(AISuggestion.center_id.in_(ids)).delete(synchronize_session=False)
+        db.query(UserCenterAssignment).filter(UserCenterAssignment.center_id.in_(ids)).delete(synchronize_session=False)
+        db.query(CenterTest).filter(CenterTest.center_id.in_(ids)).delete(synchronize_session=False)
+        
+        # 4. Finally delete the centers
+        db.query(Center).filter(Center.id.in_(ids)).delete(synchronize_session=False)
+        db.commit()
+        return {"status": "success", "message": f"Deleted {len(ids)} centers and related data"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Bulk delete failed: {str(e)}")

@@ -41,12 +41,17 @@ class CenterCreate(BaseModel):
     owner_id: str | None = None
     parent_id: int | None = None
     is_base_center: bool = False
-    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    type: str | None = None
+    bill_type: str | None = None
+    metadata_json: dict[str, Any] | None = Field(default_factory=dict)
 
 
 class CenterOut(CenterCreate):
     id: int
     created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class TestCreate(BaseModel):
@@ -63,6 +68,30 @@ class TestOut(TestCreate):
 
     class Config:
         from_attributes = True
+
+
+class MasterTestOut(BaseModel):
+    id: int
+    LAB_TestID: str
+    test_name: str
+    TestCategory_Mapped: str | None = None
+    specimen_type: str | None = None
+    metadata_json: dict[str, Any] | None = Field(default_factory=dict)
+    custom_mrp: float | None = None
+    mrp_source: str | None = None
+    mrp: float | None = None
+    mrp_source_center: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class MasterTestListOut(BaseModel):
+    items: list[MasterTestOut]
+    total: int
+    pages: int
+    skip: int
+    limit: int
 
 
 class TestUpdate(BaseModel):
@@ -84,10 +113,7 @@ class CenterTestOut(BaseModel):
     test_id: int
     custom_rate: float | None
     added_at: datetime
-    test: TestOut
-
-    class Config:
-        from_attributes = True
+    test: MasterTestOut
 
     class Config:
         from_attributes = True
@@ -118,3 +144,9 @@ class AIQueryRequest(BaseModel):
 class AISuggestionApplyRequest(BaseModel):
     suggestion_id: int
     approved: bool = False
+
+
+class DosCopyRequest(BaseModel):
+    source_center_id: int
+    target_center_id: int
+    categories: list[str] | None = None

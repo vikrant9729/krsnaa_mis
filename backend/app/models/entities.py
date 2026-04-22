@@ -47,12 +47,16 @@ class Center(Base):
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("centers.id"), nullable=True, index=True)
     base_center_id: Mapped[Optional[int]] = mapped_column(ForeignKey("centers.id"), nullable=True, index=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    bill_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     is_base_center: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     parent: Mapped[Optional["Center"]] = relationship("Center", remote_side=[id], foreign_keys=[parent_id])
     base_center: Mapped[Optional["Center"]] = relationship("Center", remote_side=[id], foreign_keys=[base_center_id])
+    datasets: Mapped[list["DosDataset"]] = relationship("DosDataset", back_populates="center", cascade="all, delete-orphan")
+    center_tests: Mapped[list["CenterTest"]] = relationship("CenterTest", back_populates="center", cascade="all, delete-orphan")
 
 
 class DosDataset(Base):
@@ -68,15 +72,21 @@ class DosDataset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    center: Mapped["Center"] = relationship("Center", back_populates="datasets")
+    rows: Mapped[list["DosRow"]] = relationship("DosRow", back_populates="dataset", cascade="all, delete-orphan")
+
 
 class DosRow(Base):
     __tablename__ = "dos_rows"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     dataset_id: Mapped[int] = mapped_column(ForeignKey("dos_datasets.id"), index=True)
-    row_hash: Mapped[str] = mapped_column(String(128), index=True)
+    test_code: Mapped[Optional[str]] = mapped_column(String(100), index=True) # EXTRACTED FOR PERFORMANCE
+    row_hash: Mapped[str] = mapped_column(String(64), index=True)
     data_json: Mapped[dict] = mapped_column(JSON)
     version_snapshot: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+
+    dataset: Mapped["DosDataset"] = relationship("DosDataset", back_populates="rows")
 
 
 class AuditLog(Base):
@@ -95,6 +105,8 @@ class AuditLog(Base):
     snapshot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
+    actor: Mapped[Optional["User"]] = relationship("User")
+
 
 class AIProviderConfig(Base):
     __tablename__ = "ai_provider_configs"
@@ -103,7 +115,9 @@ class AIProviderConfig(Base):
     provider: Mapped[str] = mapped_column(String(50), unique=True)
     api_key_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     model_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    priority: Mapped[int] = mapped_column(Integer)
+    priority: Mapped[int] = mapped_column(Integer, default=1)
+    temperature: Mapped[float] = mapped_column(Float, default=0.7)
+    max_tokens: Mapped[int] = mapped_column(Integer, default=2000)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -137,9 +151,12 @@ class CenterTest(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     center_id: Mapped[int] = mapped_column(ForeignKey("centers.id"), index=True)
-    test_id: Mapped[int] = mapped_column(ForeignKey("tests.id"), index=True)
+    test_id: Mapped[int] = mapped_column(ForeignKey("master_tests.id"), index=True)
     custom_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    center: Mapped["Center"] = relationship("Center", back_populates="center_tests")
+    test: Mapped["MasterTest"] = relationship("MasterTest")
 
 
 class DOSVersionSnapshot(Base):
@@ -164,8 +181,18 @@ class MasterTest(Base):
     TestCategory_Mapped: Mapped[Optional[str]] = mapped_column(String(100), name="category", nullable=True)
     specimen_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    custom_mrp: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    mrp_source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def code(self) -> str:
+        return self.LAB_TestID
+
+    @property
+    def name(self) -> str:
+        return self.test_name
 
 
 class UserCenterAssignment(Base):
@@ -175,3 +202,13 @@ class UserCenterAssignment(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     center_id: Mapped[int] = mapped_column(ForeignKey("centers.id"), index=True)
     assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SpecialRateList(Base):
+    __tablename__ = "special_rate_lists"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    data_json: Mapped[dict] = mapped_column(JSON) # List of {code, name, rate}
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

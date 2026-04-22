@@ -8,8 +8,10 @@ PERMISSIONS = {
     RoleEnum.MANAGER: {
         "center:read",
         "center:write",
+        "dos:read",
         "dos:upload",
         "dos:edit",
+        "dos:write",
         "rate:update",
         "ai:query",
         "ai:run",

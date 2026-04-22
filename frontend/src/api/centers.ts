@@ -9,6 +9,8 @@ export interface Center {
   parent_id?: number;
   base_center_id?: number;
   is_base_center: boolean;
+  type?: string;
+  bill_type?: string;
   metadata_json: Record<string, any>;
   created_at: string;
   updated_at: string;

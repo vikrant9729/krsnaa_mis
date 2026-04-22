@@ -1,21 +1,15 @@
-import sqlite3
-import os
+from sqlalchemy import text
+from app.db.session import engine
 
-db_path = r"c:\ACCOUNT-MAIN\KRSNAA\mis app\krsnaa-mis-software-main\krsnaa-mis-software-main\backend\krsnaa.db"
+def check_columns():
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'master_tests'"))
+        columns = [r[0] for r in res.fetchall()]
+        print(f"Columns in master_tests: {columns}")
+        
+        res = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'centers'"))
+        columns = [r[0] for r in res.fetchall()]
+        print(f"Columns in centers: {columns}")
 
-if not os.path.exists(db_path):
-    print(f"Database not found at {db_path}")
-else:
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    tables = ["centers", "dos_rows", "master_tests", "dos_datasets"]
-    for table in tables:
-        try:
-            cursor.execute(f"SELECT count(*) FROM {table}")
-            count = cursor.fetchone()[0]
-            print(f"Table {table}: {count} rows")
-        except Exception as e:
-            print(f"Error querying {table}: {e}")
-    
-    conn.close()
+if __name__ == "__main__":
+    check_columns()

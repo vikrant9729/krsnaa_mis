@@ -31,6 +31,7 @@ export default function DataQuality() {
   const [selectedCenter, setSelectedCenter] = useState<number | null>(null);
   const [report, setReport] = useState<QualityReport | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState<{ percent: number; narration: string } | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -50,26 +51,43 @@ export default function DataQuality() {
   };
 
   const scanData = async () => {
-    if (!selectedCenter) {
+    if (selectedCenter === null) {
       toast.error('Please select a center');
       return;
     }
 
     setScanning(true);
+    setScanProgress({ percent: 0, narration: 'Initializing scan...' });
     setReport(null);
     try {
+      // Simulate progress for demo; replace with real progress from backend if available
+      let progress = 0;
+      const narrationSteps = [
+        'Initializing scan...',
+        'Analyzing dataset...',
+        'Detecting duplicates...',
+        'Checking missing fields...',
+        'Validating rates...',
+        'Finalizing report...'
+      ];
+      for (let i = 0; i < narrationSteps.length; i++) {
+        setScanProgress({ percent: Math.round((i / narrationSteps.length) * 100), narration: narrationSteps[i] });
+        await new Promise(res => setTimeout(res, 400));
+      }
       const response = await api.post(`/api/ai/scan/${selectedCenter}`);
       setReport(response.data);
+      setScanProgress({ percent: 100, narration: 'Scan complete!' });
       toast.success('System Scan Complete');
     } catch (error: any) {
+      setScanProgress({ percent: 100, narration: 'Scan failed.' });
       toast.error(formatApiError(error.response?.data?.detail, 'Scan failed'));
     } finally {
-      setScanning(false);
+      setTimeout(() => { setScanning(false); setScanProgress(null); }, 1200);
     }
   };
 
   const fixDuplicates = async () => {
-    if (!selectedCenter || !report) return;
+    if (selectedCenter === null || !report) return;
     try {
       toast.loading('Deduplicating entries...', { id: 'fix' });
       await api.post(`/api/ai/fix-duplicates/${selectedCenter}`);
@@ -81,7 +99,7 @@ export default function DataQuality() {
   };
 
   const fixMissingFields = async () => {
-    if (!selectedCenter || !report) return;
+    if (selectedCenter === null || !report) return;
     try {
       toast.loading('Reconstructing missing data...', { id: 'fix' });
       await api.post(`/api/ai/fill-missing/${selectedCenter}`);
@@ -93,7 +111,7 @@ export default function DataQuality() {
   };
 
   const fixInvalidRates = async () => {
-    if (!selectedCenter || !report) return;
+    if (selectedCenter === null || !report) return;
     try {
       toast.loading('Recalibrating rate structures...', { id: 'fix' });
       await api.post(`/api/ai/fix-rates/${selectedCenter}`);
@@ -133,11 +151,13 @@ export default function DataQuality() {
             <div className="relative">
                 <FiActivity className="absolute left-4 top-1/2 -translate-y-1/2 text-[#00B4C1]" />
                 <select
-                value={selectedCenter || ''}
-                onChange={(e) => setSelectedCenter(Number(e.target.value))}
+                value={selectedCenter ?? ''}
+                onChange={(e) => setSelectedCenter(e.target.value === '' ? null : Number(e.target.value))}
                 className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-transparent focus:border-[#00B4C1]/30 rounded-2xl outline-none transition-all font-bold text-slate-800 cursor-pointer appearance-none"
                 >
                 <option value="">Select a center node...</option>
+                <option value="-1">MASTER DATA REGISTRY (GLOBAL)</option>
+                <option value="0">ALL CENTERS (NETWORK WIDE)</option>
                 {centers.map(center => (
                     <option key={center.id} value={center.id}>
                     {center.name} ({center.center_type})
@@ -148,9 +168,9 @@ export default function DataQuality() {
           </div>
           <button
             onClick={scanData}
-            disabled={scanning || !selectedCenter}
+            disabled={scanning || selectedCenter === null}
             className={`md:self-end px-10 py-4 font-bold tracking-widest uppercase text-sm rounded-2xl transition-all duration-500 relative z-10 ${
-                scanning || !selectedCenter 
+                scanning || selectedCenter === null 
                 ? 'bg-slate-100 text-slate-400' 
                 : 'bg-[#00B4C1] text-white hover:bg-[#009AA6] shadow-sm shadow-[#00B4C1]/30 active:scale-95'
             }`}
@@ -168,6 +188,19 @@ export default function DataQuality() {
             )}
           </button>
         </div>
+
+        {/* Progress Bar for Scan */}
+        {scanning && scanProgress && (
+          <div className="w-full mb-8">
+            <div className="flex items-center mb-2">
+              <span className="text-xs font-bold text-slate-500 mr-2">{scanProgress.narration}</span>
+              <span className="ml-auto text-xs font-mono text-slate-400">{scanProgress.percent}%</span>
+            </div>
+            <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-[#00B4C1] transition-all duration-500" style={{ width: `${scanProgress.percent}%` }} />
+            </div>
+          </div>
+        )}
 
         {/* Scan Results Visualization */}
         {report && (

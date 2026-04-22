@@ -4,7 +4,7 @@ from sqlalchemy import or_
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models.entities import Test, CenterTest, Center, User
+from app.models.entities import MasterTest, CenterTest, Center, User
 from app.schemas.common import TestCreate, TestOut, TestUpdate, CenterTestCreate, CenterTestOut
 from app.services.audit import log_change
 from app.services.rbac import require_permission
@@ -45,7 +45,9 @@ def create_test(
     return test
 
 
-@router.get("", response_model=list[TestOut])
+from app.schemas.common import MasterTestOut
+
+@router.get("", response_model=list[MasterTestOut])
 def list_tests(
     search: str = "",
     db: Session = Depends(get_db),
@@ -53,10 +55,14 @@ def list_tests(
 ):
     require_permission(current_user, "test:read")
 
-    query = db.query(Test)
+    query = db.query(MasterTest)
     if search:
+        search_filter = f"%{search}%"
         query = query.filter(
-            or_(Test.code.ilike(f"%{search}%"), Test.name.ilike(f"%{search}%"))
+            or_(
+                MasterTest.LAB_TestID.ilike(search_filter), 
+                MasterTest.test_name.ilike(search_filter)
+            )
         )
     return query.all()
 
@@ -168,7 +174,7 @@ def add_test_to_center(
         raise HTTPException(status_code=404, detail="Center not found")
 
     # Check if test exists
-    test = db.query(Test).filter(Test.id == payload.test_id).first()
+    test = db.query(MasterTest).filter(MasterTest.id == payload.test_id).first()
     if not test:
         raise HTTPException(status_code=404, detail="Test not found")
 
@@ -213,12 +219,44 @@ def get_center_tests(
     if not center:
         raise HTTPException(status_code=404, detail="Center not found")
 
-    return (
+    from app.models.entities import DosDataset, DosRow
+    from sqlalchemy import func
+
+    # Fetch center tests with their linked master tests
+    cts = (
         db.query(CenterTest)
         .options(joinedload(CenterTest.test))
         .filter(CenterTest.center_id == center_id)
         .all()
     )
+
+    # Get active DOS dataset for fallback rates
+    active_ds = db.query(DosDataset).filter(
+        DosDataset.center_id == center_id,
+        DosDataset.is_active == True
+    ).first()
+
+    dos_rates = {}
+    if active_ds:
+        # Build a map of UPPER(LAB_TestID) -> Bill_Rate from DOS rows
+        dos_rows = db.query(DosRow).filter(DosRow.dataset_id == active_ds.id).all()
+        for row in dos_rows:
+            raw_code = row.data_json.get("LAB_TestID") or row.data_json.get("Test_Code") or ""
+            code = str(raw_code).strip().upper()
+            rate_val = row.data_json.get("Bill_Rate") or row.data_json.get("Rate") or row.data_json.get("MRP") or 0
+            try:
+                dos_rates[code] = float(rate_val)
+            except (ValueError, TypeError):
+                dos_rates[code] = 0.0
+
+    # Enrich: if custom_rate is 0 or None, fall back to DOS rate
+    for ct in cts:
+        if (ct.custom_rate is None or ct.custom_rate == 0) and ct.test:
+            test_code = str(ct.test.LAB_TestID or "").strip().upper()
+            if test_code in dos_rates and dos_rates[test_code] > 0:
+                ct.custom_rate = dos_rates[test_code]
+
+    return cts
 
 
 @router.delete("/centers/{center_test_id}")

@@ -75,7 +75,7 @@ export default function CenterCopy() {
         target_center_id: targetCenter,
         categories: selectedCategories.length > 0 ? selectedCategories : null,
       });
-      
+
       toast.success('DOS copied successfully!');
       setSourceCenter(null);
       setTargetCenter(null);
@@ -112,7 +112,7 @@ export default function CenterCopy() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select source center...</option>
-                {centers.filter(c => c.is_base_center || c.center_type === 'HLM').map(center => (
+                {centers.filter(c => c.is_base_center || c.center_type === 'CC' || c.center_type === 'HLM' || c.center_type === 'PROJECT').map(center => (
                   <option key={center.id} value={center.id}>
                     {center.name} ({center.center_type})
                   </option>
@@ -157,11 +157,10 @@ export default function CenterCopy() {
                   <button
                     key={category}
                     onClick={() => toggleCategory(category)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      selectedCategories.includes(category)
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${selectedCategories.includes(category)
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
                   >
                     {selectedCategories.includes(category) && <FiCheck className="inline mr-1" />}
                     {category}
