@@ -9,6 +9,8 @@ export interface MasterTest {
   metadata_json: Record<string, any>;
   mrp?: number;
   mrp_source_center?: string;
+  custom_mrp?: number;
+  mrp_source?: string;
   created_at: string;
 }
 
