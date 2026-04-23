@@ -16,6 +16,14 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.username == payload.username).first()
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
+    
+    # Validate password length (bcrypt 72-byte limit)
+    if len(payload.password.encode('utf-8')) > 72:
+        raise HTTPException(
+            status_code=400, 
+            detail="Password too long. Maximum 72 bytes (approximately 72 ASCII characters)"
+        )
+    
     user = User(
         username=payload.username,
         full_name=payload.full_name,
