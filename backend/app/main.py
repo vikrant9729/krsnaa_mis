@@ -36,9 +36,16 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # CORS Configuration
+# Allow all origins in development, specific in production
+allowed_origins = ["*"] if settings.environment == "development" else [
+    settings.frontend_url,
+    "http://localhost:3000",
+    "https://localhost:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
