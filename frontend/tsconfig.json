@@ -28,7 +28,7 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    "**/*.css"
+    "types/**/*.d.ts"
   ],
   "exclude": [
     "node_modules"
